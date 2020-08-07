@@ -1,0 +1,223 @@
+import DrivingInterface.*;
+
+public class MyCar {
+
+    boolean is_debug = true;
+
+    public void control_driving(boolean a1, float a2, float a3, float a4, float a5, float a6, float a7, float a8,
+                                float[] a9, float[] a10, float[] a11, float[] a12) {
+
+        // ===========================================================
+        // Don't remove this area. ===================================
+        // ===========================================================
+        DrivingInterface di = new DrivingInterface();
+        DrivingInterface.CarStateValues sensing_info = di.get_car_state(a1,a2,a3,a4,a5,a6,a7,a8,a9,a10,a11,a12);
+        // ===========================================================
+
+        if(is_debug) {
+            System.out.println("=========================================================");
+            System.out.println("[MyCar] to middle: " + sensing_info.to_middle);
+
+            System.out.println("[MyCar] collided: " + sensing_info.collided);
+            System.out.println("[MyCar] car speed: " + sensing_info.speed + "km/h");
+
+            System.out.println("[MyCar] is moving forward: " + sensing_info.moving_forward);
+            System.out.println("[MyCar] moving angle: " + sensing_info.moving_angle);
+            System.out.println("[MyCar] lap_progress: " + sensing_info.lap_progress);
+            
+            //전방의 10개 구간에 대한 각도를 배열로 
+            StringBuilder forward_angles = new StringBuilder("[MyCar] track_forward_angles: ");
+            for (Float track_forward_angle : sensing_info.track_forward_angles) {
+                forward_angles.append(track_forward_angle).append(", ");
+            }
+            System.out.println(forward_angles);
+            
+            //전방 10개의 way-point 와 차량의 직선 거리를 제공합니다.
+            StringBuilder to_way_points = new StringBuilder("[MyCar] distance_to_way_points: ");
+            for (Float distance_to_way_point : sensing_info.distance_to_way_points) {
+                to_way_points.append(distance_to_way_point).append(", ");
+            }
+            System.out.println(to_way_points);
+            
+            //전방 100m 까지의 장애물 정보를 배열로 
+            StringBuilder forward_obstacles = new StringBuilder("[MyCar] track_forward_obstacles: ");
+            for (DrivingInterface.ObstaclesInfo track_forward_obstacle : sensing_info.track_forward_obstacles) {
+                forward_obstacles.append("{dist:").append(track_forward_obstacle.dist)
+                        .append(", to_middle:").append(track_forward_obstacle.to_middle).append("}, ");
+            }
+            System.out.println(forward_obstacles);
+
+            StringBuilder opponent_cars = new StringBuilder("[MyCar] opponent_cars_info: ");
+            for (DrivingInterface.CarsInfo carsInfo : sensing_info.opponent_cars_info) {
+                opponent_cars.append("{dist:").append(carsInfo.dist)
+                        .append(", to_middle:").append(carsInfo.to_middle)
+                        .append(", speed:").append(carsInfo.speed).append("km/h}, ");
+            }
+            System.out.println(opponent_cars);
+
+            System.out.println("=========================================================");
+        }
+
+        // ===========================================================
+        // Area for writing code about driving rule ==================
+        // ===========================================================
+        // Editing area starts from here
+        //
+
+        // Moving straight forward
+        
+        float set_break = 0.0f;
+        float set_throttle = 1;
+        float set_steering = 0.0f;
+        
+        
+        for (Float track_forward_angle : sensing_info.track_forward_angles) {
+            if(Math.abs(track_forward_angle) > 70){
+            	set_throttle = 0;
+            	set_break = 1;
+            }
+        }
+        
+        int angle_num = (int)sensing_info.speed / 45;
+        float ref_angle = sensing_info.track_forward_angles.get(angle_num);
+        float middle_add = (sensing_info.to_middle / 100) * -1; //커브값에 대입하기는 너무 큰수이기 때문에 70으로 나눈다
+        set_steering = (ref_angle - sensing_info.moving_angle) / (240 - sensing_info.speed);
+        set_steering += middle_add;
+        
+        System.out.println("bswwww sssssref_angle : " + ref_angle + "angle_num :: " +angle_num + "set_steering ::" + set_steering);
+        
+        
+        
+        if(sensing_info.track_forward_obstacles.size() > 0) {
+        	//DrivingInterface.ObstaclesInfo fwd_obstacle =  sensing_info.track_forward_obstacles.get(0);
+        	
+        	int num = 0;
+            boolean right_obstacle = false;
+            boolean left_obstacle = false;
+        	
+        	for(DrivingInterface.ObstaclesInfo fwd_obstacle : sensing_info.track_forward_obstacles) {
+        		if(fwd_obstacle.dist < 60 && fwd_obstacle.dist > 0 && Math.abs(fwd_obstacle.to_middle) < 8.0 ) {
+            		float avoid_width = 2.7f;
+                	float diff = fwd_obstacle.to_middle - sensing_info.to_middle;
+                	if(Math.abs(diff) < avoid_width) {
+                		ref_angle = (float)(Math.abs(Math.atan((diff-avoid_width) / fwd_obstacle.dist) * 57.29597));
+                		middle_add = 0;
+                		if(diff > 0) {
+                			ref_angle *= -1;
+                		}
+                		
+                		if( (ref_angle - sensing_info.moving_angle) > 0) {
+                			if(right_obstacle) {
+                				ref_angle *= -1;
+                			}
+                		} else {
+                			if(left_obstacle) {
+                				ref_angle *= -1;
+                			}
+                		}
+                		
+                		set_steering = (ref_angle - sensing_info.moving_angle) / (240 - sensing_info.speed);
+                		set_steering += middle_add;
+                		
+                	}
+                	
+                	DrivingInterface.ObstaclesInfo next_obstacle = sensing_info.track_forward_obstacles.get(num+1);
+                	
+                	if(next_obstacle != null) {
+                		if(next_obstacle.dist - fwd_obstacle.dist > 20) {
+                			System.out.println("BSW Debug set_steering :: " + set_steering);
+                			StringBuilder forward_obstacles = new StringBuilder("[MyCar] track_forward_obstacles: ");
+                            for (DrivingInterface.ObstaclesInfo track_forward_obstacle : sensing_info.track_forward_obstacles) {
+                                forward_obstacles.append("{dist:").append(track_forward_obstacle.dist)
+                                        .append(", to_middle:").append(track_forward_obstacle.to_middle).append("}, ");
+                            }
+                            System.out.println(forward_obstacles);
+                			break;
+                		}
+                	}
+                	
+                	if(fwd_obstacle.to_middle > 0) {
+                		right_obstacle = true;
+                		left_obstacle = false;
+                	} else {
+                		right_obstacle = false;
+                		left_obstacle = true;
+                	}
+            	}
+        	}
+        	/*
+        	DrivingInterface.ObstaclesInfo fwd_obstacle =  sensing_info.track_forward_obstacles.get(0);
+        	if(fwd_obstacle.dist < 60 && fwd_obstacle.dist > 0 && Math.abs(fwd_obstacle.to_middle) < 8.0 ) {
+        		float avoid_width = 2.7f;
+            	float diff = fwd_obstacle.to_middle - sensing_info.to_middle;
+            	if(Math.abs(diff) < avoid_width) {
+            		ref_angle = (float)(Math.abs(Math.atan((diff-avoid_width) / fwd_obstacle.dist) * 57.29597));
+            		
+            		middle_add = 0;
+            		if(diff > 0) {
+            			ref_angle *= -1;
+            		}
+            		set_steering = (ref_angle - sensing_info.moving_angle) / (180 - sensing_info.speed);
+            		set_steering += middle_add;
+            	}
+        	}
+        	*/
+        }
+        
+        car_controls.steering = set_steering;
+        car_controls.throttle = set_throttle;
+        car_controls.brake = set_break;
+        
+        /*
+        if(sensing_info.speed > 30) {
+        	car_controls.brake = 1;
+        } else {
+        	car_controls.throttle = 1;
+        }
+        
+        for (Float track_forward_angle : sensing_info.track_forward_angles) {
+        	if(track_forward_angle > 0) {
+        		if(sensing_info.to_middle > 0 && sensing_info.to_middle < 1) {
+        			car_controls.steering  = 1;
+        		} else {
+        			car_controls.steering  = -1;
+        		}
+        	} else if(track_forward_angle < 0) {
+        		car_controls.steering  = -1;
+        	} else {
+        		car_controls.steering  = 0;
+        	}
+        }
+        */
+
+        if(is_debug) {
+            System.out.println("[MyCar] steering:"+car_controls.steering+
+                                     ", throttle:"+car_controls.throttle+", brake:"+car_controls.brake);
+        }
+
+        //
+        // Editing area ends
+        // =======================================================
+    }
+
+    // ===========================================================
+    // Don't remove below area. ==================================
+    // ===========================================================
+    public native void StartDriving();
+
+    static MyCar car_controls;
+
+    float throttle;
+    float steering;
+    float brake;
+
+    static {
+        System.loadLibrary("DrivingInterface/DrivingInterface");
+    }
+
+    public static void main(String[] args) {
+        car_controls = new MyCar();
+        car_controls.StartDriving();
+    }
+    // ===========================================================
+}
